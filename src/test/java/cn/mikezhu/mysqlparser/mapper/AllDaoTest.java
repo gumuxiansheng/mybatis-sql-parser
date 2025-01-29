@@ -1,11 +1,13 @@
 package cn.mikezhu.mysqlparser.mapper;
 
-import cn.mikezhu.mysqlparser.utils.MyBatisUtil;
-import cn.mikezhu.mysqlparser.utils.ObjectUtil;
+import cn.mikezhu.mysqlparser.utils.*;
 import org.apache.ibatis.builder.StaticSqlSource;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.mapping.SqlSource;
+import org.apache.ibatis.ognl.Ognl;
+import org.apache.ibatis.ognl.OgnlException;
+import org.apache.ibatis.ognl.SimpleNode;
 import org.apache.ibatis.reflection.MetaObject;
 import org.apache.ibatis.scripting.defaults.RawSqlSource;
 import org.apache.ibatis.scripting.xmltags.*;
@@ -66,6 +68,37 @@ public class AllDaoTest {
                     SqlNode rootSqlNode = (SqlNode) ObjectUtil.getPrivateField(dynamicSqlSource, "rootSqlNode"); // 通过反射获取私有字段
                     SqlNodeExplorer sqlNodeExplorer = new SqlNodeExplorer();
                     sqlNodeExplorer.explore(rootSqlNode);
+                    List<String> conditions = sqlNodeExplorer.getConditions();
+                    Set<String> parameters = sqlNodeExplorer.getParameters();
+                    final List<Map<String, Object>> candidateTmpParams = new ArrayList<>();
+                    conditions.forEach(condition -> {
+                        try {
+                            SimpleNode expression = (SimpleNode) Ognl.parseExpression(condition);
+                            List<ParamConstraint> paramConstraintList = new AstVisitor().visit(expression).stream().distinct().collect(Collectors.toList());
+
+                            List<Map<String, Object>> params = ParameterGenerator.generate(paramConstraintList);
+                            candidateTmpParams.addAll(params);
+                            params.forEach(p -> {
+                                Object s = OgnlCache.getValue(condition, p);
+                                logger.info("param: {}, ognl: {}, result: {}", p, condition, s);
+                            });
+                        } catch (OgnlException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+                    final List<Map<String, Object>> candidateParams =  candidateTmpParams.stream().distinct().collect(Collectors.toList());
+
+                    candidateParams.forEach(cp -> {
+                        parameters.forEach(p -> {
+                            if (!cp.containsKey(p)) {
+                                cp.put(p, "m");
+                            }
+                        });
+                        final String sql = showSql(session.getConfiguration(), dynamicSqlSource.getBoundSql(cp));
+                        logger.info(sql);
+                    });
+
+
                     Map map = new HashMap<>();
                 } catch (Exception e) {
                     throw new RuntimeException(e);
@@ -78,6 +111,14 @@ public class AllDaoTest {
     public static class SqlNodeExplorer {
         private List<String> conditions = new ArrayList<>();
         private Set<String> parameters = new HashSet<>();
+
+        public List<String> getConditions() {
+            return conditions;
+        }
+
+        public Set<String> getParameters() {
+            return parameters;
+        }
 
         public void explore(SqlNode sqlNode) throws Exception {
             if (sqlNode instanceof MixedSqlNode) {
@@ -117,26 +158,6 @@ public class AllDaoTest {
             }
         }
     }
-//
-//    public class ParameterGenerator {
-//        public List<Map<String, Object>> generateParams(List<Condition> conditions) {
-//            List<ParamSet> paramSets = new ArrayList<>();
-//            for (Condition cond : conditions) {
-//                paramSets.add(generateParamSet(cond));
-//            }
-//            return CartesianProductGenerator.generate(paramSets);
-//        }
-//
-//        private ParamSet generateParamSet(Condition cond) {
-//            switch (cond.getType()) {
-//                case NOT_NULL:
-//                    return ParamSet.of(cond.getParamName(), Arrays.asList(null, "dummyValue"));
-//                case GREATER_THAN:
-//                    return ParamSet.of(cond.getParamName(), Arrays.asList(cond.getThreshold(), cond.getThreshold() + 1));
-//                // 其他条件类型处理...
-//            }
-//        }
-//    }
 
     public static Set<String> parseParameters(String text) {
         Set<String> parameters = new HashSet<>();

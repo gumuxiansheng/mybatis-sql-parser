@@ -12,6 +12,7 @@ public class ParamConstraint {
 
     public enum ConstraintType {
         NOT_NULL,       // 空值检查：param != null
+        NULL,           // 空值检查：param == null
         COMPARISON,     // 比较运算：>, <, ==, >=, <= 等
         ENUM,           // 枚举匹配：status == 'ACTIVE'
         TYPE,           // 类型匹配：status instanceof Status
@@ -37,6 +38,7 @@ public class ParamConstraint {
     public List<Object> generateTestValues() {
         switch (constraintType) {
             case NOT_NULL:
+            case NULL:
                 return Arrays.asList(null, generateNonNullValue());
             case COMPARISON:
                 return generateComparisonValues();
@@ -78,6 +80,10 @@ public class ParamConstraint {
             return ConstraintType.NOT_NULL;
         }
 
+        if ("==".equals(operator) && comparedValue == null) {
+            return ConstraintType.NULL;
+        }
+
         // 枚举类型判断
         if (valueType.isEnum() || (comparedValue != null && comparedValue.getClass().isEnum())) {
             return ConstraintType.ENUM;
@@ -105,7 +111,7 @@ public class ParamConstraint {
         if (valueType == Integer.class) return 0;
         if (valueType == String.class) return "c_test";
         if (valueType == Boolean.class) return true;
-        return new Object(); // 默认返回新对象
+        return "c_test_em"; // 默认返回新对象
     }
 
     /**
