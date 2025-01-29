@@ -36,8 +36,8 @@
     <update id="updateTask" parameterType="cn.mikezhu.mysqlparser.bo.Task">
         UPDATE dev_distributed_task.task
         <set>
-            <if test="taskName != null">task_name = #{taskName},</if>
-            <if test="lastStartTime != null">last_start_time = #{lastStartTime},</if>
+            <if test="taskName != null and taskName!=''.toString()">task_name = #{taskName},</if>
+            <if test="lastStartTime != null and lastHost in {'01', '02'}">last_start_time = #{lastStartTime},</if>
             <if test="lastEndTime != null">last_end_time = #{lastEndTime},</if>
             <if test="lastHost != null">last_host = #{lastHost},</if>
             <if test="nextScheduledTime != null">next_scheduled_time = #{nextScheduledTime},</if>
